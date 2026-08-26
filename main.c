@@ -9,11 +9,18 @@ const int playerR      = 25;
 const int playerSpeed = 200;
 const Color playerColor = GREEN;
 
-
 typedef struct Player{
   Vector2 pos;
   int r;
 } Player;
+
+// ==== Utils
+void clampf(float *value, float min, float max){
+  if(*value >= max) *value = max;
+  if(*value <= min) *value = min;
+}
+
+
 
 // -> or ^ to up fps
 // <- or v to down fps
@@ -48,11 +55,8 @@ void MovePlayer(Player *p, float dt){
   p -> pos.x += dt * playerSpeed * v.x;
   p -> pos.y += dt * playerSpeed * v.y;
 
-  if(p -> pos.x < p -> r) p -> pos.x = p -> r;
-  if(p -> pos.y < p -> r) p -> pos.y = p -> r;
-  if(p -> pos.x > windowWidth - p -> r) p -> pos.x = windowWidth - p -> r;
-  if(p -> pos.y > windowHeight - p -> r) p -> pos.y = windowHeight - p -> r;
-
+  clampf(&(p -> pos.x), p -> r, windowWidth - p -> r);
+  clampf(&(p -> pos.y), p -> r, windowHeight - p -> r);
 }
 
 
