@@ -1,5 +1,6 @@
 #include <raylib.h>
 #include <stdio.h>
+#include <math.h>
 
 const int windowWidth  = 600;
 const int windowHeight = 600;
@@ -29,41 +30,29 @@ void ChangeFPS(void){
 }
 
 void MovePlayer(Player *p, float dt){
+  if(dt > 0.1f) dt = 0.1f;
+
+  Vector2 v = (Vector2){0, 0};
+
+  if(IsKeyDown(KEY_A)) v.x -= 1.0f;
+  if(IsKeyDown(KEY_D)) v.x += 1.0f;
+  if(IsKeyDown(KEY_S)) v.y += 1.0f;
+  if(IsKeyDown(KEY_W)) v.y -= 1.0f;
+
+  float length = sqrtf(v.x * v.x + v.y * v.y);
+  if(length > 0.0f){
+    v.x /= length;
+    v.y /= length;
+  }
+
+  p -> pos.x += dt * playerSpeed * v.x;
+  p -> pos.y += dt * playerSpeed * v.y;
 
   if(p -> pos.x < p -> r) p -> pos.x = p -> r;
   if(p -> pos.y < p -> r) p -> pos.y = p -> r;
   if(p -> pos.x > windowWidth - p -> r) p -> pos.x = windowWidth - p -> r;
   if(p -> pos.y > windowHeight - p -> r) p -> pos.y = windowHeight - p -> r;
-  if(dt > 0.1f) dt = 0.1f;
 
-  if(IsKeyDown(KEY_A)){
-    if(p -> pos.x >= p -> r && p -> pos.x <= windowWidth - p -> r){
-      p -> pos.x -= 1 * playerSpeed * dt;
-    }else{
-      p -> pos.x = p -> r;
-    }
-  }
-  if(IsKeyDown(KEY_S)){
-    if(p -> pos.y >= p -> r && p -> pos.y <= windowHeight - p -> r){
-      p -> pos.y += 1 * playerSpeed * dt;
-    }else {
-      p -> pos.y = windowHeight - p -> r;
-    }
-  }
-  if(IsKeyDown(KEY_D)){
-    if(p -> pos.x >= p -> r && p -> pos.x <= windowWidth - p -> r){
-      p -> pos.x += 1 * playerSpeed * dt;
-    }else{
-      p -> pos.x = windowWidth - p -> r;
-    }
-  }
-  if(IsKeyDown(KEY_W)){
-    if(p -> pos.y >= p -> r && p -> pos.y <= windowHeight - p -> r){
-      p -> pos.y -= 1 * playerSpeed * dt;
-    }else{
-      p -> pos.y = p -> r;
-    }
-  }
 }
 
 

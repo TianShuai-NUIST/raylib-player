@@ -1,7 +1,7 @@
 CC := clang
 SRC := main.c
 TARGET := program
-CFLAG := -Wall -pg -g -lc -Wextra -lraylib
+CFLAG := -Wall -pg -g -lc -Wextra -lraylib -lm
 
 $(TARGET): $(SRC)
 	$(CC) $(SRC) -o $(TARGET) ${CFLAG}
