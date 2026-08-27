@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <math.h>
 
+// FunctioinName : 大驼峰
+// valueName     : 小驼峰
+// ClassName     : 大驼峰
+
 #define REL_EPS 1e-9
 
 const int windowWidth   = 600;
@@ -13,6 +17,7 @@ const int playerSpeed   = 200;
 const int playerHealth  = 100;
 const Color playerColor = GREEN;
 const Vector2 playerSpawnPoint = (Vector2) {windowWidth / 2, windowHeight / 2};
+const Vector2 playerTarget = (Vector2) {-1, -1};
 
 const int enemyR        = 10;
 const int enemySpeed    = 150;
@@ -22,32 +27,38 @@ const Vector2 enemySpawnPoint = (Vector2) {enemyR, enemyR};
 const Vector2 enemyTarget = playerSpawnPoint;
 
 #define PLAYER_INIT (Player) { \
-  .e = (Entity){               \
+  .base = (Entity){            \
     .pos = playerSpawnPoint,   \
     .r = playerR,              \
     .speed = playerSpeed,      \
     .health = playerHealth,    \
     .color = playerColor,      \
+    .target = playerTarget,    \
                                \
+    .toTarget = ToTarget,      \
+    .inTarget = InTarget,      \
     .draw = DrawEntity,        \
   },                           \
-    .move = MovePlayer,        \
+  .cursor = false,             \
+                               \
+  .move = MovePlayer,          \
 }
 
 #define ENEMY_INIT (Enemy) {   \
-  .e = (Entity){               \
+  .base = (Entity){            \
     .pos = enemySpawnPoint,    \
     .r = enemyR,               \
     .speed = enemySpeed,       \
     .health = enemyHealth,     \
     .color = enemyColor,       \
+    .target = enemyTarget,     \
                                \
+    .toTarget = ToTarget,      \
+    .inTarget = InTarget,      \
     .draw = DrawEntity,        \
   },                           \
-  .target = enemyTarget,       \
                                \
-  .move = navigateTarget,      \
-  .in_target = in_target,      \
+  .move = NavigateTarget,      \
 }
 
 typedef struct Entity{
@@ -56,34 +67,36 @@ typedef struct Entity{
   int r;
   int health;
   Color color;
+  // player 光标操作
+  Vector2 target;
 
-//   void (*move)(struct Entity *e, float dt);
+  void (*toTarget)(struct Entity *e, const Vector2 *target, float dt);
+  bool (*inTarget)(struct Entity *e);
   void (*draw)(struct Entity *e);
 } Entity;
 
 typedef struct Player{
-  Entity e;
+  Entity base;
+  bool cursor;
 
-  void (*move)(struct Entity *e, float dt);
+  void (*move)(struct Player *p, float dt);
 } Player;
 
 typedef struct Enemy{
-  Entity e;
-  Vector2 target;
+  Entity base;
 
   void (*move)(struct Enemy *e, float dt);
-  bool (*in_target)(struct Enemy *e);
 } Enemy;
 
 // ==== Utils
-void clampf(float *value, float min, float max){
+void ClampF(float *value, float min, float max){
   if(*value >= max) *value = max;
   if(*value <= min) *value = min;
 }
 
 // 浮点数相等判断,
 // |a - b| <= max(|a|, |b|) * rel_eps
-bool floatEqRel(double a, double b){
+bool FloatEqRel(double a, double b){
   if(a == 0.0 && b == 0.0) return true;
 
   double diff = fabs (a - b);
@@ -92,7 +105,7 @@ bool floatEqRel(double a, double b){
   return diff <= REL_EPS * max_val;
 }
 
-double Vec2distance(Vector2 start, Vector2 end){
+double Vec2Distance(Vector2 start, Vector2 end){
   double dx = start.x - end.x;
   double dy = start.y - end.y;
   return sqrt(dx * dx + dy * dy);
@@ -118,7 +131,7 @@ void DrawEntity(Entity *e){
   DrawCircleV(e -> pos, e -> r, e -> color);
 }
 
-void MoveEntity(Entity *e,const Vector2 *v, float dt){
+void ToTarget(Entity *e, const Vector2 *v, float dt){
   if(dt > 0.1f) dt = 0.1f;
 
   Vector2 cv = *v;
@@ -132,41 +145,44 @@ void MoveEntity(Entity *e,const Vector2 *v, float dt){
   e -> pos.x += dt * e -> speed * cv.x;
   e -> pos.y += dt * e -> speed * cv.y;
 
-  clampf(&(e -> pos.x), e -> r, windowWidth - e -> r);
-  clampf(&(e -> pos.y), e -> r, windowHeight - e -> r);
+  ClampF(&(e -> pos.x), e -> r, windowWidth - e -> r);
+  ClampF(&(e -> pos.y), e -> r, windowHeight - e -> r);
 }
 
-void MovePlayer(Entity *e, float dt){
+void MovePlayer(Player *p, float dt){
   Vector2 v = (Vector2){0, 0};
   if(IsKeyDown(KEY_A)) v.x -= 1.0f;
   if(IsKeyDown(KEY_D)) v.x += 1.0f;
   if(IsKeyDown(KEY_S)) v.y += 1.0f;
   if(IsKeyDown(KEY_W)) v.y -= 1.0f;
 
-  MoveEntity(e, &v, dt);
+  // MoveEntity(e, &v, dt);
+  p -> base.toTarget(&(p -> base), &v, dt);
 }
 
-bool in_target(struct Enemy *e){
+bool InTarget(struct Entity *e){
   // if(floatEqRel(e->e.pos.x, e->target.x) &&
   //    floatEqRel(e->e.pos.x, e->target.x))
-  if(Vec2distance(e->e.pos, e->target) < REL_EPS) return true;
+  if(Vec2Distance(e->pos, e->target) < REL_EPS) return true;
   else return false;
 }
 
-void navigateTarget(struct Enemy *e, float dt){
-  if(e->in_target(e)) return;
+void NavigateTarget(struct Enemy *e, float dt){
+  if(e->base.inTarget(&(e->base))) return;
 
   Vector2 v;
-  v.x = e->target.x - e->e.pos.x;
-  v.y = e->target.y - e->e.pos.y;
+  v.x = e->base.target.x - e->base.pos.x;
+  v.y = e->base.target.y - e->base.pos.y;
 
   // 如果距离小于步长, 直接到坐标上(防止抖动)
   float remaining = sqrt(v.x * v.x + v.y * v.y);
-  if(remaining <= e->e.speed * dt){
-    e->e.pos = e->target;
+  if(remaining <= e->base.speed * dt){
+    e->base.pos = e->base.target;
+    return;
   }
 
-  MoveEntity(&(e->e), &v, dt);
+  // MoveEntity(&(e->base), &v, dt);
+  e -> base.toTarget(&(e->base), &v, dt);
 }
 
 // ==== game Loop function
@@ -183,19 +199,19 @@ int main(void){
   while(!WindowShouldClose()){
     // calc
     dt = GetFrameTime();
-    enemy.target = player.e.pos;
+    enemy.base.target = player.base.pos;
 
     // event
     ChangeFPS();
-    player.move(&(player.e), dt);
+    player.move(&player, dt);
     enemy.move(&enemy,dt);
 
     // draw
     BeginDrawing();
     ClearBackground(BLACK);
     DrawFPS(20, 20);
-    player.e.draw(&(player.e));
-    enemy.e.draw(&(enemy.e));
+    player.base.draw(&(player.base));
+    enemy.base.draw(&(enemy.base));
     EndDrawing();
   }
   CloseWindow();

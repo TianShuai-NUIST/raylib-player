@@ -13,20 +13,23 @@
 ```mermaid
 classDiagram
     class Entity{
-        + Pos
-        + r
-        + speed
-        + health
-        + color
-        + draw() void
+        + Pos : Vector2
+        + r : float
+        + speed :float
+        + health : float
+        + color : Color
+        + target : Vector2
+
+        + ToTarget(Target : Vector2) void
+        + InTarget() bool
+        + Draw(Pos : Vector2) void
     }
 
     class Enemy{
-        + move(float dt) void
-        + in_target() bool
+        + Move(dt : float) void
     }
     class Player{
-        + move(float dt) void
+        + Move(dt : float) void
     }
     Entity <|-- Enemy
     Entity <|-- Player
