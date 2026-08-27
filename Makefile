@@ -1,6 +1,6 @@
 CC := clang
 SRC := main.c
-TARGET := program
+TARGET := raylib-player
 CFLAG := -Wall -pg -g -lc -Wextra -lraylib -lm
 
 $(TARGET): $(SRC)
