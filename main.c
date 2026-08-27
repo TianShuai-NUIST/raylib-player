@@ -1,12 +1,13 @@
 #include <raylib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <time.h>
 #include <math.h>
 
 // FunctioinName : 大驼峰
 // valueName     : 小驼峰
 // ClassName     : 大驼峰
-
-#define REL_EPS 1e-9
 
 const int windowWidth   = 600;
 const int windowHeight  = 600;
@@ -26,6 +27,7 @@ const Color enemyColor  = RED;
 const Vector2 enemySpawnPoint = (Vector2) {enemyR, enemyR};
 const Vector2 enemyTarget = playerSpawnPoint;
 
+#define REL_EPS 1e-9
 #define PLAYER_INIT (Player) { \
   .base = (Entity){            \
     .pos = playerSpawnPoint,   \
@@ -89,6 +91,13 @@ typedef struct Enemy{
 } Enemy;
 
 // ==== Utils
+
+int RandRange(const int min, const int max){
+  assert(min < max);
+  if (min == max) return min;
+  else return rand() % (max - min) + min;
+}
+
 void ClampF(float *value, float min, float max){
   if(*value >= max) *value = max;
   if(*value <= min) *value = min;
@@ -156,13 +165,10 @@ void MovePlayer(Player *p, float dt){
   if(IsKeyDown(KEY_S)) v.y += 1.0f;
   if(IsKeyDown(KEY_W)) v.y -= 1.0f;
 
-  // MoveEntity(e, &v, dt);
   p -> base.toTarget(&(p -> base), &v, dt);
 }
 
 bool InTarget(struct Entity *e){
-  // if(floatEqRel(e->e.pos.x, e->target.x) &&
-  //    floatEqRel(e->e.pos.x, e->target.x))
   if(Vec2Distance(e->pos, e->target) < REL_EPS) return true;
   else return false;
 }
@@ -181,16 +187,30 @@ void NavigateTarget(struct Enemy *e, float dt){
     return;
   }
 
-  // MoveEntity(&(e->base), &v, dt);
   e -> base.toTarget(&(e->base), &v, dt);
 }
 
 // ==== game Loop function
 
+#define ENEMY_NUMBER 1
+#define ENEMY_LOOP(x)                  \
+for(int i = 0; i < ENEMY_NUMBER; i++){ \
+  do{                                  \
+    x;                                 \
+  }while(0);                           \
+}                                      \
+
 // main loop
 int main(void){
+  srand(time(NULL));
+
   Player player = PLAYER_INIT;
-  Enemy enemy = ENEMY_INIT;
+  Enemy enemy[ENEMY_NUMBER];
+  for(int i = 0; i < ENEMY_NUMBER; i++){
+    enemy[i] = ENEMY_INIT;
+    enemy[i].base.pos.x = RandRange(enemyR, windowWidth - enemyR);
+    enemy[i].base.pos.y = RandRange(enemyR, windowHeight - enemyR);
+  }
   float dt = 0;
 
   InitWindow(windowWidth, windowHeight, "Moving..");
@@ -199,19 +219,18 @@ int main(void){
   while(!WindowShouldClose()){
     // calc
     dt = GetFrameTime();
-    enemy.base.target = player.base.pos;
+    ENEMY_LOOP(enemy[i].base.target = player.base.pos);
 
     // event
     ChangeFPS();
     player.move(&player, dt);
-    enemy.move(&enemy,dt);
-
+    ENEMY_LOOP(enemy[i].move(enemy + i,dt));
     // draw
     BeginDrawing();
     ClearBackground(BLACK);
     DrawFPS(20, 20);
     player.base.draw(&(player.base));
-    enemy.base.draw(&(enemy.base));
+    ENEMY_LOOP(enemy[i].base.draw(&(enemy[i].base)));
     EndDrawing();
   }
   CloseWindow();
