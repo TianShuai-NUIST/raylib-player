@@ -27,42 +27,6 @@ const Color enemyColor  = RED;
 const Vector2 enemySpawnPoint = (Vector2) {enemyR, enemyR};
 const Vector2 enemyTarget = playerSpawnPoint;
 
-#define REL_EPS 1e-9
-#define PLAYER_INIT (Player) { \
-  .base = (Entity){            \
-    .pos = playerSpawnPoint,   \
-    .r = playerR,              \
-    .speed = playerSpeed,      \
-    .health = playerHealth,    \
-    .color = playerColor,      \
-    .target = playerTarget,    \
-                               \
-    .toTarget = ToTarget,      \
-    .inTarget = InTarget,      \
-    .draw = DrawEntity,        \
-  },                           \
-  .cursor = false,             \
-                               \
-  .move = MovePlayer,          \
-}
-
-#define ENEMY_INIT (Enemy) {   \
-  .base = (Entity){            \
-    .pos = enemySpawnPoint,    \
-    .r = enemyR,               \
-    .speed = enemySpeed,       \
-    .health = enemyHealth,     \
-    .color = enemyColor,       \
-    .target = enemyTarget,     \
-                               \
-    .toTarget = ToTarget,      \
-    .inTarget = InTarget,      \
-    .draw = DrawEntity,        \
-  },                           \
-                               \
-  .move = NavigateTarget,      \
-}
-
 typedef struct Entity{
   Vector2 pos;
   int speed;
@@ -89,6 +53,42 @@ typedef struct Enemy{
 
   void (*move)(struct Enemy *e, float dt);
 } Enemy;
+
+#define REL_EPS 1e-9
+#define PLAYER_INIT (Player) { \
+  .base = (Entity){            \
+    .pos = playerSpawnPoint,   \
+    .r = playerR,              \
+    .speed = playerSpeed,      \
+    .health = playerHealth,    \
+    .color = playerColor,      \
+    .target = playerTarget,    \
+    \
+    .toTarget = ToTarget,      \
+    .inTarget = InTarget,      \
+    .draw = DrawEntity,        \
+  },                           \
+  .cursor = false,             \
+  \
+  .move = MovePlayer,          \
+}
+
+#define ENEMY_INIT (Enemy) {   \
+  .base = (Entity){            \
+    .pos = enemySpawnPoint,    \
+    .r = enemyR,               \
+    .speed = enemySpeed,       \
+    .health = enemyHealth,     \
+    .color = enemyColor,       \
+    .target = enemyTarget,     \
+    \
+    .toTarget = ToTarget,      \
+    .inTarget = InTarget,      \
+    .draw = DrawEntity,        \
+  },                           \
+  \
+  .move = NavigateTarget,      \
+}
 
 // ==== Utils
 

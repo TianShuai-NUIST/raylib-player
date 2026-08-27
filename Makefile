@@ -11,3 +11,6 @@ clean:
 
 run: ${TARGET}
 	@./${TARGET}
+
+tags:
+	ctags -R --languages=C,C++ --exclude=.git -f .ctags --c-kinds=+p+l --extras=+q /usr/include/raylib.h /usr/include/raymath.h

@@ -1,6 +1,7 @@
 compile_commands.json
 gmon.out
-tags
 test
 raylib-player
+.ctags
+.tags.sys
 
