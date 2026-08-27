@@ -99,8 +99,9 @@ int RandRange(const int min, const int max){
 }
 
 void ClampF(float *value, float min, float max){
-  if(*value >= max) *value = max;
-  if(*value <= min) *value = min;
+  if(*value > max) *value = max;
+  else if(*value < min) *value = min;
+  else return;
 }
 
 // 浮点数相等判断,
@@ -236,3 +237,5 @@ int main(void){
   CloseWindow();
   return 0;
 }
+
+//TODO: 添加碰撞
