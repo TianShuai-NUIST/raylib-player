@@ -11,14 +11,21 @@
 // valueName     : 小驼峰
 // ClassName     : 大驼峰
 
+#define CLAMP_A(value, min, max) ({                    \
+  typeof(value) _value = (value);                        \
+  typeof(max) _max     = (max);                          \
+  typeof(min) _min     = (min);                          \
+  _value > _max ? _max : (_value < _min ? _min : _value); \
+})                                                     \
+
 typedef struct Entity Entity;
 typedef struct Player Player;
 typedef struct Enemy Enemy;
 
 const int windowWidth   = 600;
 const int windowHeight  = 600;
-const int originFPS     = 60;
 const Vector2 wSize = (Vector2){(float)windowWidth, (float)windowHeight};
+const int originFPS     = 60;
 
 // (TYPE, NAME, PLAYER_VALUE, ENEMY_VALUE)
 #define ENTITY_ATTRI_TABLE                                     \
@@ -26,6 +33,8 @@ XX(int, r, 25, 10)                                             \
 XX(Vector2, vel, ((Vector2){150, 150}),                        \
    ((Vector2){120, 120}))                                           \
 XX(int, health, 100, 50)                                       \
+XX(int, iujryBufferTime, 0, 0)                                       \
+XX(bool, isIujrying, false, false)                                       \
 XX(float, mass, 10, 5)                                       \
 XX(Color, color, (GREEN), (RED))                               \
 XX(Vector2, spawnPoint,                                        \
@@ -136,6 +145,14 @@ bool FloatEqRel(double a, double b){
   return diff <= REL_EPS * max_val;
 }
 
+bool ColorEq(Color c1, Color c2){
+  if(c1.r != c2.r ||
+     c1.g != c2.g ||
+     c1.b != c2.b ||
+     c1.a != c2.a) return false;
+  else return true;
+}
+
 // -> or ^ to up fps
 // <- or v to down fps
 // r to reset
@@ -211,12 +228,64 @@ for(int i = 0; i < ENEMY_NUMBER; i++){ \
   }while(0);                           \
 }                                      \
 
-// #define ENEMY_LOOPS(x)                 \
-// for(int i = 0; i < ENEMY_NUMBER; i++){ \
-//   do{                                  \
-//     x                                  \
-//   }while(0);                           \
-// }                                      \
+#define ENEMY_LOOPS(x)                 \
+for(int i = 0; i < ENEMY_NUMBER; i++){ \
+  do{                                  \
+    x                                  \
+  }while(0);                           \
+}                                      \
+
+void PressedEvent(Player *p){
+  if(IsKeyPressed(KEY_SPACE)){
+    p->base.color = RED;
+  }
+}
+
+void ShowInfo(const Player *p){
+  if(IsKeyPressed(KEY_TAB)){
+    printf("Health :%d\n", p->base.health);
+    printf("iujryBufferTime:%d\n", p->base.iujryBufferTime);
+  }
+}
+#define COLOR_CHANGE_FACTOR 5
+void BindValue(unsigned char *value, const unsigned char base){
+  int diff = (int)*value - (int)base;
+  if(diff == 0) return;
+  if(diff < 0){
+    *value += COLOR_CHANGE_FACTOR;
+  }else{
+    *value -= COLOR_CHANGE_FACTOR;
+  }
+  *value = CLAMP_A(*value, 0, 255);
+}
+
+void KeepColor(Player *p){
+  bool e = ColorEq(GREEN, p->base.color);
+  bool inIujrying = p->base.isIujrying;
+  int *t = &(p->base.iujryBufferTime);
+
+  if(e){
+    *t = 0;
+    return;
+  }
+  if(*t == 0){
+    if(!inIujrying){
+      *t = 10;
+      p->base.isIujrying = true;
+      return;
+    }else{
+      BindValue(&(p->base.color.r), 0);
+      BindValue(&(p->base.color.g), 228);
+      BindValue(&(p->base.color.b), 48);
+      BindValue(&(p->base.color.a), 255);
+    }
+  }else{
+    *t -= 1;
+    if(*t == 0){
+      p->base.isIujrying = false;
+    }
+  }
+}
 
 // main loop
 int main(void){
@@ -225,6 +294,7 @@ int main(void){
 #define XX(type, name, ...) .name = player_##name,
   Player player = PLAYER_INIT;
 #undef XX
+
   Enemy enemy[ENEMY_NUMBER];
   for(int i = 0; i < ENEMY_NUMBER; i++){
 #define XX(type, name, ...) .name = enemy_##name,
@@ -235,17 +305,28 @@ int main(void){
     enemy[i].base.pos.y = RandRange(r, windowHeight - r);
   }
 
+  Entity *entityList[ENEMY_NUMBER + 1];
+  entityList[0] = &(player.base);
+  for(int i = 1; i < ENEMY_NUMBER + 1; i++){
+    entityList[i] = &((enemy + i)->base);
+  }
+
   InitWindow(windowWidth, windowHeight, "Moving..");
   SetTargetFPS(60);
 
   while(!WindowShouldClose()){
     // calc
+    if(player.base.health <= 0) break;
+    
     ENEMY_LOOP(enemy[i].base.target = player.base.pos);
 
     // event
     ChangeFPS();
+    ShowInfo(&player);
+    PressedEvent(&player);
     player.move(&player);
     ENEMY_LOOP(enemy[i].move(enemy + i));
+    KeepColor(&player);
     // draw
     BeginDrawing();
     ClearBackground(BLACK);
@@ -260,3 +341,6 @@ int main(void){
 
 //TODO: 添加碰撞
 // 1. 增加Vector2 vel
+//TODO: 受伤颜色改变
+// 1. 保持颜色0.5s
+// 2. 开始恢复颜色
