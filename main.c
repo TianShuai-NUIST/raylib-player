@@ -15,33 +15,53 @@ const int windowWidth   = 600;
 const int windowHeight  = 600;
 const int originFPS     = 60;
 
-const int playerR       = 25;
-const Vector2 playerVel   = (Vector2){100, 100};
-const int playerHealth  = 100;
-const Color playerColor = GREEN;
-const Vector2 playerSpawnPoint = (Vector2) {windowWidth / 2, windowHeight / 2};
-const Vector2 playerTarget = (Vector2) {-1, -1};
+// (TYPE, NAME, PLAYER_VALUE, ENEMY_VALUE)
+#define ENTITY_ATTRI_TABLE                                     \
+XX(int, r, 25, 10)                                             \
+XX(Vector2, vel, ((Vector2){100, 100}),                        \
+   ((Vector2){50, 50}))                                           \
+XX(int, health, 100, 50)                                       \
+XX(Color, color, (GREEN), (RED))                               \
+XX(Vector2, spawnPoint,                                        \
+   ((Vector2) {(float)windowWidth / 2, (float)windowHeight / 2}), \
+   ((Vector2) {enemy_r, enemy_r}))                                \
+XX(Vector2, target, ((Vector2){-1, -1}), player_spawnPoint)    \
+XX(Vector2, pos, player_spawnPoint,                            \
+   enemy_spawnPoint)                                              \
 
-const int enemyR        = 10;
-const Vector2 enemyVel    = (Vector2){50, 50};
-const int enemyHealth   = 50;
-const Color enemyColor  = RED;
-const Vector2 enemySpawnPoint = (Vector2) {enemyR, enemyR};
-const Vector2 enemyTarget = playerSpawnPoint;
+typedef struct Entity Entity;
 
+void DrawEntity(Entity *e);
+void ToTarget(Entity *e, const Vector2 *v);
+bool InTarget(struct Entity *e);
+
+typedef void (*toTargetFunc ) (struct Entity *e, const Vector2 *target ) ;
+typedef bool (*inTargetFunc ) (struct Entity *e                        ) ;
+typedef void (*drawFunc     ) (struct Entity *e                        ) ;
+
+// (Type, Name, Value, Value)
+#define ENTITY_FUNC_TABLE                             \
+XX(toTargetFunc , toTarget , ToTarget   , ToTarget  ) \
+XX(inTargetFunc , inTarget , InTarget   , InTarget  ) \
+XX(drawFunc     , draw     , DrawEntity , DrawEntity) \
+
+
+#define XX(type, name, value, ...) const type player_##name = value;
+ENTITY_ATTRI_TABLE;
+ENTITY_FUNC_TABLE;
+#undef XX
+
+#define XX(type, name, _, value) const type enemy_##name = value;
+ENTITY_ATTRI_TABLE;
+ENTITY_FUNC_TABLE;
+#undef XX
+
+#define XX(type, name, _, ...) type name;
 typedef struct Entity{
-  Vector2 pos;
-  Vector2 vel;
-  int r;
-  int health;
-  Color color;
-  // player 光标操作
-  Vector2 target;
-
-  void (*toTarget)(struct Entity *e, const Vector2 *target);
-  bool (*inTarget)(struct Entity *e);
-  void (*draw)(struct Entity *e);
+  ENTITY_ATTRI_TABLE;
+  ENTITY_FUNC_TABLE;
 } Entity;
+#undef XX
 
 typedef struct Player{
   Entity base;
@@ -57,40 +77,27 @@ typedef struct Enemy{
 } Enemy;
 
 #define REL_EPS 1e-9
-#define PLAYER_INIT (Player) { \
-  .base = (Entity){            \
-    .pos = playerSpawnPoint,   \
-    .r = playerR,              \
-    .vel = playerVel,      \
-    .health = playerHealth,    \
-    .color = playerColor,      \
-    .target = playerTarget,    \
-    \
-    .toTarget = ToTarget,      \
-    .inTarget = InTarget,      \
-    .draw = DrawEntity,        \
-  },                           \
-  .cursor = false,             \
-  \
-  .move = MovePlayer,          \
-}
 
-#define ENEMY_INIT (Enemy) {   \
-  .base = (Entity){            \
-    .pos = enemySpawnPoint,    \
-    .r = enemyR,               \
-    .vel = enemyVel,       \
-    .health = enemyHealth,     \
-    .color = enemyColor,       \
-    .target = enemyTarget,     \
-    \
-    .toTarget = ToTarget,      \
-    .inTarget = InTarget,      \
-    .draw = DrawEntity,        \
-  },                           \
-  \
-  .move = MoveEnemy,      \
+#define XX(type, name, ...) .name = player_##name,
+#define PLAYER_INIT (Player){   \
+  .base =(Entity){              \
+    ENTITY_ATTRI_TABLE          \
+    ENTITY_FUNC_TABLE           \
+  },                            \
+  .cursor = false,              \
+  .move = MovePlayer,           \
 }
+#undef XX
+
+#define XX(type, name, ...) .name = enemy_##name,
+#define ENEMY_INIT (Enemy){   \
+  .base =(Entity){              \
+    ENTITY_ATTRI_TABLE          \
+    ENTITY_FUNC_TABLE           \
+  },                            \
+  .move = MoveEnemy,            \
+}
+#undef XX
 
 // ==== Utils
 
@@ -127,7 +134,7 @@ double Vec2Distance(Vector2 start, Vector2 end){
 // <- or v to down fps
 // r to reset
 void ChangeFPS(void){
-  int fps = GetFPS();
+  int fps = GetFrameTime();
   if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_UP)){
     SetTargetFPS(fps + 1);
   } else if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_DOWN)){
@@ -144,7 +151,7 @@ void DrawEntity(Entity *e){
 }
 
 void ToTarget(Entity *e, const Vector2 *v){
-  float dt = GetFPS();
+  float dt = GetFrameTime();
   if(dt > 0.1f) dt = 0.1f;
 
   Vector2 cv = *v;
@@ -178,7 +185,7 @@ void MovePlayer(Player *p){
 }
 
 void MoveEnemy(struct Enemy *e){
-  float dt = GetFPS();
+  float dt = GetFrameTime();
   if(e->base.inTarget(&(e->base))) return;
 
   Vector2 v;
@@ -205,32 +212,35 @@ for(int i = 0; i < ENEMY_NUMBER; i++){ \
   }while(0);                           \
 }                                      \
 
-#define ENEMY_LOOPS(x)                 \
-for(int i = 0; i < ENEMY_NUMBER; i++){ \
-  do{                                  \
-    x                                  \
-  }while(0);                           \
-}                                      \
+// #define ENEMY_LOOPS(x)                 \
+// for(int i = 0; i < ENEMY_NUMBER; i++){ \
+//   do{                                  \
+//     x                                  \
+//   }while(0);                           \
+// }                                      \
 
 // main loop
 int main(void){
   srand(time(NULL));
 
+#define XX(type, name, ...) .name = player_##name,
   Player player = PLAYER_INIT;
+#undef XX
   Enemy enemy[ENEMY_NUMBER];
   for(int i = 0; i < ENEMY_NUMBER; i++){
+#define XX(type, name, ...) .name = enemy_##name,
     enemy[i] = ENEMY_INIT;
-    enemy[i].base.pos.x = RandRange(enemyR, windowWidth - enemyR);
-    enemy[i].base.pos.y = RandRange(enemyR, windowHeight - enemyR);
+#undef XX
+    float r = enemy[i].base.r;
+    enemy[i].base.pos.x = RandRange(r, windowWidth  - r);
+    enemy[i].base.pos.y = RandRange(r, windowHeight - r);
   }
-  float dt = 0;
 
   InitWindow(windowWidth, windowHeight, "Moving..");
   SetTargetFPS(60);
 
   while(!WindowShouldClose()){
     // calc
-    dt = GetFrameTime();
     ENEMY_LOOP(enemy[i].base.target = player.base.pos);
 
     // event
