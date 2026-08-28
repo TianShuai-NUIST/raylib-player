@@ -99,12 +99,12 @@ typedef struct Enemy{
 
 // Init Enemy Struct
 #define XX(type, name, ...) .name = enemy_##name,
-#define ENEMY_INIT (Enemy){   \
-  .base =(Entity){              \
-    ENTITY_ATTRI_TABLE          \
-    ENTITY_FUNC_TABLE           \
-  },                            \
-  .move = MoveEnemy,            \
+#define ENEMY_INIT (Enemy){ \
+  .base =(Entity){          \
+    ENTITY_ATTRI_TABLE      \
+    ENTITY_FUNC_TABLE       \
+  },                        \
+  .move = MoveEnemy,        \
 }
 #undef XX
 
