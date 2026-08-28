@@ -18,13 +18,15 @@ typedef struct Enemy Enemy;
 const int windowWidth   = 600;
 const int windowHeight  = 600;
 const int originFPS     = 60;
+const Vector2 wSize = (Vector2){(float)windowWidth, (float)windowHeight};
 
 // (TYPE, NAME, PLAYER_VALUE, ENEMY_VALUE)
 #define ENTITY_ATTRI_TABLE                                     \
 XX(int, r, 25, 10)                                             \
-XX(Vector2, vel, ((Vector2){100, 100}),                        \
-   ((Vector2){50, 50}))                                           \
+XX(Vector2, vel, ((Vector2){150, 150}),                        \
+   ((Vector2){120, 120}))                                           \
 XX(int, health, 100, 50)                                       \
+XX(float, mass, 10, 5)                                       \
 XX(Color, color, (GREEN), (RED))                               \
 XX(Vector2, spawnPoint,                                        \
    ((Vector2) {(float)windowWidth / 2, (float)windowHeight / 2}), \
@@ -86,6 +88,7 @@ typedef struct Enemy{
 #define REL_EPS 1e-9
 
 // Init Player Struct
+// 实际上这里的X宏没有任何作用, 只是作为一个标记存在而已
 #define XX(type, name, ...) .name = player_##name,
 #define PLAYER_INIT (Player){   \
   .base =(Entity){              \
@@ -116,10 +119,10 @@ int RandRange(const int min, const int max){
   else return rand() % (max - min) + min;
 }
 
-void ClampF(float *value, float min, float max){
-  if(*value > max) *value = max;
-  else if(*value < min) *value = min;
-  else return;
+void ClampV2(Vector2 *value, const Vector2 min,const Vector2 max){
+  float vx = Clamp(value->x,min.x, max.x);
+  float vy = Clamp(value->y,min.y, max.y);
+  *value = (Vector2){vx, vy};
 }
 
 // 浮点数相等判断,
@@ -131,12 +134,6 @@ bool FloatEqRel(double a, double b){
   double max_val = fmax(fabs(a), fabs(b));
 
   return diff <= REL_EPS * max_val;
-}
-
-double Vec2Distance(Vector2 start, Vector2 end){
-  double dx = start.x - end.x;
-  double dy = start.y - end.y;
-  return sqrt(dx * dx + dy * dy);
 }
 
 // -> or ^ to up fps
@@ -159,27 +156,21 @@ void DrawEntity(Entity *e){
   DrawCircleV(e -> pos, e -> r, e -> color);
 }
 
+// entity direction
 void ToTarget(Entity *e, const Vector2 *v){
   float dt = GetFrameTime();
   if(dt > 0.1f) dt = 0.1f;
 
-  Vector2 cv = *v;
+  Vector2 cv = Vector2Normalize(*v);
 
-  float length = sqrtf(v->x * v->x + v->y * v->y);
-  if(length > 0.0f){
-    cv.x = v->x / length;
-    cv.y = v->y / length;
-  }
+  e->pos = Vector2Add(e->pos, Vector2Scale(Vector2Multiply(e->vel, cv), dt));
 
-  e -> pos.x += dt * e -> vel.x * cv.x;
-  e -> pos.y += dt * e -> vel.y * cv.y;
-
-  ClampF(&(e -> pos.x), e -> r, windowWidth - e -> r);
-  ClampF(&(e -> pos.y), e -> r, windowHeight - e -> r);
+  Vector2 vr = (Vector2){e->r, e->r};
+  ClampV2(&(e->pos), vr, Vector2Subtract(wSize, vr));
 }
 
 bool InTarget(Entity *e){
-  if(Vec2Distance(e->pos, e->target) < REL_EPS) return true;
+  if(Vector2Distance(e->pos, e->target) < REL_EPS) return true;
   else return false;
 }
 
@@ -198,11 +189,10 @@ void MoveEnemy(struct Enemy *e){
   if(e->base.inTarget(&(e->base))) return;
 
   Vector2 v;
-  v.x = e->base.target.x - e->base.pos.x;
-  v.y = e->base.target.y - e->base.pos.y;
+  v = Vector2Subtract(e->base.target, e->base.pos);
 
   // 如果距离小于步长, 直接到坐标上(防止抖动)
-  float remaining = sqrt(v.x * v.x + v.y * v.y);
+  float remaining = Vector2Length(v);
   if(remaining <= Vector2Length(e->base.vel) * dt){
     e->base.pos = e->base.target;
     return;
@@ -213,7 +203,7 @@ void MoveEnemy(struct Enemy *e){
 
 // ==== game Loop function
 
-#define ENEMY_NUMBER 1
+#define ENEMY_NUMBER 2
 #define ENEMY_LOOP(x)                  \
 for(int i = 0; i < ENEMY_NUMBER; i++){ \
   do{                                  \

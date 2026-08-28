@@ -42,3 +42,8 @@ classDiagram
     Entity <|-- Enemy
     Entity <|-- Player
 ```
+
+# 技巧
+
+- [X-marco](https://dsghbc.github.io/blog/2026/08/28/X-Macro-in-C)
+

@@ -3,7 +3,6 @@ SRC     := main.c
 TARGET  := raylib-player
 CFLAG   := -Wall -pg -g -lc -Wextra -lraylib -lm
 
-# 所有 .c 源文件(供 tags 目标收集依赖头)
 SRCS    := $(shell find . -name '*.c' -not -path './.git/*' | grep -v build)
 
 $(TARGET): $(SRC)
