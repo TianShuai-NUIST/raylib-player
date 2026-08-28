@@ -11,6 +11,10 @@
 // valueName     : 小驼峰
 // ClassName     : 大驼峰
 
+typedef struct Entity Entity;
+typedef struct Player Player;
+typedef struct Enemy Enemy;
+
 const int windowWidth   = 600;
 const int windowHeight  = 600;
 const int originFPS     = 60;
@@ -29,39 +33,42 @@ XX(Vector2, target, ((Vector2){-1, -1}), player_spawnPoint)    \
 XX(Vector2, pos, player_spawnPoint,                            \
    enemy_spawnPoint)                                              \
 
-typedef struct Entity Entity;
-
-void DrawEntity(Entity *e);
-void ToTarget(Entity *e, const Vector2 *v);
-bool InTarget(struct Entity *e);
-
-typedef void (*toTargetFunc ) (struct Entity *e, const Vector2 *target ) ;
-typedef bool (*inTargetFunc ) (struct Entity *e                        ) ;
-typedef void (*drawFunc     ) (struct Entity *e                        ) ;
-
 // (Type, Name, Value, Value)
-#define ENTITY_FUNC_TABLE                             \
-XX(toTargetFunc , toTarget , ToTarget   , ToTarget  ) \
-XX(inTargetFunc , inTarget , InTarget   , InTarget  ) \
-XX(drawFunc     , draw     , DrawEntity , DrawEntity) \
+#define ENTITY_FUNC_TABLE                                                          \
+XX(toTargetFunc , toTarget , ToTarget  , void , (struct Entity*, const Vector2 *)) \
+XX(inTargetFunc , inTarget , InTarget  , bool , (struct Entity*))                  \
+XX(drawFunc     , draw     , DrawEntity, void , (struct Entity*))                  \
 
+// function ProtoType
+#define XX(type, name, value, return_t, arg) return_t value arg;
+ENTITY_FUNC_TABLE
+#undef XX
 
+// typedef function pointer
+#define XX(type, name, value, return_t, arg) typedef return_t (*type) arg;
+ENTITY_FUNC_TABLE
+#undef XX
+
+// const value With Player
 #define XX(type, name, value, ...) const type player_##name = value;
 ENTITY_ATTRI_TABLE;
 ENTITY_FUNC_TABLE;
 #undef XX
 
+// const value With Enemy
 #define XX(type, name, _, value) const type enemy_##name = value;
 ENTITY_ATTRI_TABLE;
+#undef XX
+#define XX(type, name, value, ...) const type enemy_##name = value;
 ENTITY_FUNC_TABLE;
 #undef XX
 
-#define XX(type, name, _, ...) type name;
 typedef struct Entity{
+#define XX(type, name, _, ...) type name;
   ENTITY_ATTRI_TABLE;
   ENTITY_FUNC_TABLE;
-} Entity;
 #undef XX
+} Entity;
 
 typedef struct Player{
   Entity base;
@@ -78,6 +85,7 @@ typedef struct Enemy{
 
 #define REL_EPS 1e-9
 
+// Init Player Struct
 #define XX(type, name, ...) .name = player_##name,
 #define PLAYER_INIT (Player){   \
   .base =(Entity){              \
@@ -89,6 +97,7 @@ typedef struct Enemy{
 }
 #undef XX
 
+// Init Enemy Struct
 #define XX(type, name, ...) .name = enemy_##name,
 #define ENEMY_INIT (Enemy){   \
   .base =(Entity){              \
@@ -169,7 +178,7 @@ void ToTarget(Entity *e, const Vector2 *v){
   ClampF(&(e -> pos.y), e -> r, windowHeight - e -> r);
 }
 
-bool InTarget(struct Entity *e){
+bool InTarget(Entity *e){
   if(Vec2Distance(e->pos, e->target) < REL_EPS) return true;
   else return false;
 }

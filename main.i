@@ -7098,32 +7098,40 @@ extern int timespec_get (struct timespec *__ts, int __base)
 const int windowWidth = 600;
 const int windowHeight = 600;
 const int originFPS = 60;
-# 31 "main.c"
+# 32 "main.c"
 typedef struct Entity Entity;
+typedef struct Player Player;
+typedef struct Enemy Enemy;
+# 48 "main.c"
+#
+void ToTarget (struct Entity*, const Vector2 *); _Bool InTarget (struct Entity*); void DrawEntity (struct Entity*);
 
-void DrawEntity(Entity *e);
-void ToTarget(Entity *e, const Vector2 *v);
-_Bool InTarget(struct Entity *e);
 
-typedef void (*toTarget ) (struct Entity *e, const Vector2 *target ) ;
-typedef _Bool (*inTarget ) (struct Entity *e ) ;
-typedef void (*draw ) (struct Entity *e ) ;
-# 49 "main.c"
-const int player_r = 25; const Vector2 player_vel = ((Vector2){100, 100}); const int player_health = 100; const Color player_color = ((Color){ 0, 228, 48, 255 }); const Vector2 player_spawnPoint = ((Vector2) {windowWidth / 2, windowHeight / 2}); const Vector2 player_target = ((Vector2){-1, -1}); const Vector2 player_pos = player_spawnPoint;;
-const toTarget player_toTarget = ToTarget;const inTarget player_inTarget = InTarget;const draw player_drawEntity = DrawEntity;;
+
+
+typedef void (*toTargetFunc) (struct Entity*, const Vector2 *); typedef _Bool (*inTargetFunc) (struct Entity*); typedef void (*drawFunc) (struct Entity*);
+
+
+
+
+const int player_r = 25; const Vector2 player_vel = ((Vector2){100, 100}); const int player_health = 100; const Color player_color = ((Color){ 0, 228, 48, 255 }); const Vector2 player_spawnPoint = ((Vector2) {(float)windowWidth / 2, (float)windowHeight / 2}); const Vector2 player_target = ((Vector2){-1, -1}); const Vector2 player_pos = player_spawnPoint;;
+const toTargetFunc player_toTarget = ToTarget; const inTargetFunc player_inTarget = InTarget; const drawFunc player_draw = DrawEntity;;
+
 
 
 
 const int enemy_r = 10; const Vector2 enemy_vel = ((Vector2){50, 50}); const int enemy_health = 50; const Color enemy_color = ((Color){ 230, 41, 55, 255 }); const Vector2 enemy_spawnPoint = ((Vector2) {enemy_r, enemy_r}); const Vector2 enemy_target = player_spawnPoint; const Vector2 enemy_pos = enemy_spawnPoint;;
-const toTarget enemy_toTarget = ToTarget;const inTarget enemy_inTarget = InTarget;const draw enemy_drawEntity = DrawEntity;;
 
+
+const toTargetFunc enemy_toTarget = ToTarget; const inTargetFunc enemy_inTarget = InTarget; const drawFunc enemy_draw = DrawEntity;;
 
 
 typedef struct Entity{
-  int r; Vector2 vel; int health; Color color; Vector2 spawnPoint; Vector2 target; Vector2 pos;;
-  toTarget toTarget;inTarget inTarget;draw drawEntity;;
-} Entity;
 
+  int r; Vector2 vel; int health; Color color; Vector2 spawnPoint; Vector2 target; Vector2 pos;;
+  toTargetFunc toTarget; inTargetFunc inTarget; drawFunc draw;;
+
+} Entity;
 
 typedef struct Player{
   Entity base;
@@ -7137,9 +7145,9 @@ typedef struct Enemy{
 
   void (*move)(struct Enemy *e);
 } Enemy;
-# 119 "main.c"
+# 117 "main.c"
 int RandRange(const int min, const int max){
-  ((void) sizeof ((min < max) ? 1 : 0), __extension__ ({ if (min < max) ; else __assert_fail ("min < max", "main.c", 120, __extension__ __PRETTY_FUNCTION__); }));
+  ((void) sizeof ((min < max) ? 1 : 0), __extension__ ({ if (min < max) ; else __assert_fail ("min < max", "main.c", 118, __extension__ __PRETTY_FUNCTION__); }));
   if (min == max) return min;
   else return rand() % (max - min) + min;
 }
@@ -7206,7 +7214,7 @@ void ToTarget(Entity *e, const Vector2 *v){
   ClampF(&(e -> pos.y), e -> r, windowHeight - e -> r);
 }
 
-_Bool InTarget(struct Entity *e){
+_Bool InTarget(Entity *e){
   if(Vec2Distance(e->pos, e->target) < 1e-9) return 1;
   else return 0;
 }
@@ -7238,17 +7246,17 @@ void MoveEnemy(struct Enemy *e){
 
   e -> base.toTarget(&(e->base), &v);
 }
-# 238 "main.c"
+# 236 "main.c"
 int main(void){
   srand(time(((void*)0)));
 
 
-  Player player = (Player){ .base =(Entity){ .r = player_r, .vel = player_vel, .health = player_health, .color = player_color, .spawnPoint = player_spawnPoint, .target = player_target, .pos = player_pos, .toTarget = player_toTarget,.inTarget = player_inTarget,.drawEntity = player_drawEntity, }, .cursor = 0, .move = MovePlayer, };
+  Player player = (Player){ .base =(Entity){ .r = player_r, .vel = player_vel, .health = player_health, .color = player_color, .spawnPoint = player_spawnPoint, .target = player_target, .pos = player_pos, .toTarget = player_toTarget, .inTarget = player_inTarget, .draw = player_draw, }, .cursor = 0, .move = MovePlayer, };
 
   Enemy enemy[1];
   for(int i = 0; i < 1; i++){
 
-    enemy[i] = (Enemy){ .base =(Entity){ .r = enemy_r, .vel = enemy_vel, .health = enemy_health, .color = enemy_color, .spawnPoint = enemy_spawnPoint, .target = enemy_target, .pos = enemy_pos, .toTarget = enemy_toTarget,.inTarget = enemy_inTarget,.drawEntity = enemy_drawEntity, }, .move = MoveEnemy, };
+    enemy[i] = (Enemy){ .base =(Entity){ .r = enemy_r, .vel = enemy_vel, .health = enemy_health, .color = enemy_color, .spawnPoint = enemy_spawnPoint, .target = enemy_target, .pos = enemy_pos, .toTarget = enemy_toTarget, .inTarget = enemy_inTarget, .draw = enemy_draw, }, .move = MoveEnemy, };
 
     float r = enemy[i].base.r;
     enemy[i].base.pos.x = RandRange(r, windowWidth - r);
