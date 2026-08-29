@@ -19,6 +19,13 @@
 })                                                     \
 
 typedef struct Entity Entity;
+typedef enum HurtState {
+  HURT_FLASH,   // 闪白
+  HURT_PERSIST,// 疼痛暗红
+  HURT_RECOVER, // 恢复颜色
+  HURT_IDLE,      // 正常
+} HurtState;
+
 typedef struct Player Player;
 typedef struct Enemy Enemy;
 
@@ -27,31 +34,34 @@ const int windowHeight  = 600;
 const Vector2 wSize = (Vector2){(float)windowWidth, (float)windowHeight};
 const int originFPS     = 60;
 
+void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k);
+
 // (TYPE, NAME, PLAYER_VALUE, ENEMY_VALUE)
 #define ENTITY_ATTRI_TABLE                                     \
 XX(int, r, 25, 10)                                             \
 XX(Vector2, vel, ((Vector2){150, 150}),                        \
    ((Vector2){120, 120}))                                           \
 XX(int, health, 100, 50)                                       \
-XX(int, iujryBufferTime, 0, 0)                                       \
-XX(bool, isIujrying, false, false)                                       \
 XX(float, mass, 10, 5)                                       \
 XX(Color, color, (GREEN), (RED))                               \
+XX(Color, defaultColor, (GREEN), (RED))                               \
 XX(Vector2, spawnPoint,                                        \
    ((Vector2) {(float)windowWidth / 2, (float)windowHeight / 2}), \
    ((Vector2) {enemy_r, enemy_r}))                                \
 XX(Vector2, target, ((Vector2){-1, -1}), player_spawnPoint)    \
 XX(Vector2, pos, player_spawnPoint,                            \
    enemy_spawnPoint)                                              \
-XX(int, hurtState, 0, 0)\
+\
+XX(HurtState, hurtState, HURT_IDLE, HURT_IDLE)\
 XX(int, stateTimer, 0, 0)\
 XX(Color, targetColor, player_color, enemy_color)\
 
 // (Type, Name, Value, Value)
-#define ENTITY_FUNC_TABLE                                                          \
-XX(toTargetFunc , toTarget , ToTarget  , void , (struct Entity*, const Vector2 *)) \
-XX(inTargetFunc , inTarget , InTarget  , bool , (struct Entity*))                  \
-XX(drawFunc     , draw     , DrawEntity, void , (struct Entity*))                  \
+#define ENTITY_FUNC_TABLE                                                             \
+XX(toTargetFunc  , toTarget  , ToTarget   , void , (struct Entity*, const Vector2)) \
+XX(inTargetFunc  , inTarget  , InTarget   , bool , (struct Entity*))                  \
+XX(setTargetFunc , setTarget , SetTarget  , void , (struct Entity*, const Vector2)) \
+XX(drawFunc      , draw      , DrawEntity , void , (struct Entity*))                  \
 
 // function ProtoType
 #define XX(type, name, value, return_t, arg) return_t value arg;
@@ -149,11 +159,16 @@ bool FloatEqRel(double a, double b){
 }
 
 bool ColorEq(Color c1, Color c2){
-  if(c1.r != c2.r ||
-     c1.g != c2.g ||
-     c1.b != c2.b ||
-     c1.a != c2.a) return false;
-  else return true;
+  return (c1.r == c2.r && c1.g == c2.g && c1.b == c2.b && c1.a == c2.a);
+}
+
+bool ColorEqApprox(Color c1, Color c2, unsigned char tolerance){
+  int dr = (int)c1.r - (int)c2.r;
+  int dg = (int)c1.g - (int)c2.g;
+  int db = (int)c1.b - (int)c2.b;
+  int da = (int)c1.a - (int)c2.a;
+
+  return ( abs(dr) <= tolerance && abs(dg) <= tolerance && abs(db) <= tolerance && abs(da) <= tolerance );
 }
 
 // -> or ^ to up fps
@@ -172,16 +187,72 @@ void ChangeFPS(void){
 
 // ===== Entity function
 
+void ChangeHurtState(Entity *e, HurtState newHurtState){
+  e->hurtState = newHurtState;
+
+  if (HURT_IDLE == newHurtState) return;
+  switch(newHurtState){
+    case HURT_IDLE:
+    break;
+    case HURT_FLASH:
+      e->stateTimer = 3;
+    break;
+    case HURT_PERSIST:
+      e->stateTimer = 20;
+      e->targetColor = ColorFromHSV(355.0f, 0.8f, 0.75f);
+    break;
+    case HURT_RECOVER:
+      // e->stateTimer = 20;
+      e->targetColor = e->defaultColor;
+    break;
+  }
+}
+
+void UpdateHurtEffect(Entity *e){
+  if(e->hurtState == HURT_IDLE) return;
+
+  Vector3 hsv = ColorToHSV(e->color);
+
+  switch(e->hurtState){
+    case HURT_FLASH:
+      e->color = WHITE;
+      e->stateTimer--;
+      if(e->stateTimer == 0) ChangeHurtState(e, HURT_PERSIST);
+    break;
+    case HURT_PERSIST:
+      MoveTowardsHSV(&hsv, ColorToHSV(e->targetColor), 0.8f);
+      e->color = ColorFromHSV(hsv.x, hsv.y, hsv.z);
+
+      e->stateTimer--;
+      if(e->stateTimer == 0) ChangeHurtState(e, HURT_RECOVER);
+    break;
+    case HURT_RECOVER:
+      MoveTowardsHSV(&hsv, ColorToHSV(e->targetColor), 0.15f);
+      e->color = ColorFromHSV(hsv.x, hsv.y, hsv.z);
+
+      if(ColorEqApprox(e->color, e->defaultColor, 3)){
+        ChangeHurtState(e, HURT_IDLE);
+      }
+    break;
+    case HURT_IDLE:
+    break;
+  }
+}
+
+void SetTarget(Entity *e, const Vector2 target){
+  e->target = target;
+}
+
 void DrawEntity(Entity *e){
   DrawCircleV(e -> pos, e -> r, e -> color);
 }
 
 // entity direction
-void ToTarget(Entity *e, const Vector2 *v){
+void ToTarget(Entity *e, const Vector2 v){
   float dt = GetFrameTime();
   if(dt > 0.1f) dt = 0.1f;
 
-  Vector2 cv = Vector2Normalize(*v);
+  Vector2 cv = Vector2Normalize(v);
 
   e->pos = Vector2Add(e->pos, Vector2Scale(Vector2Multiply(e->vel, cv), dt));
 
@@ -201,7 +272,7 @@ void MovePlayer(Player *p){
   if(IsKeyDown(KEY_S)) v.y += 1.0f;
   if(IsKeyDown(KEY_W)) v.y -= 1.0f;
 
-  p -> base.toTarget(&(p -> base), &v);
+  p -> base.toTarget(&(p -> base), v);
 }
 
 void MoveEnemy(struct Enemy *e){
@@ -218,84 +289,73 @@ void MoveEnemy(struct Enemy *e){
     return;
   }
 
-  e -> base.toTarget(&(e->base), &v);
+  e -> base.toTarget(&(e->base), v);
 }
 
 // ==== game Loop function
 
-#define ENEMY_NUMBER 2
-#define ENEMY_LOOP(x)                  \
-for(int i = 0; i < ENEMY_NUMBER; i++){ \
-  do{                                  \
-    x;                                 \
-  }while(0);                           \
-}                                      \
-
-#define ENEMY_LOOPS(x)                 \
-for(int i = 0; i < ENEMY_NUMBER; i++){ \
-  do{                                  \
-    x                                  \
-  }while(0);                           \
-}                                      \
 
 void PressedEvent(Player *p){
   if(IsKeyPressed(KEY_SPACE)){
-    p->base.color = RED;
-    p->base.isIujrying = true;
+    ChangeHurtState(&(p->base), HURT_FLASH);
   }
 }
 
 void ShowInfo(const Player *p){
   if(IsKeyPressed(KEY_TAB)){
     printf("Health :%d\n", p->base.health);
-    printf("iujryBufferTime:%d\n", p->base.iujryBufferTime);
-  }
-}
-#define COLOR_CHANGE_FACTOR 5
-void BindValue(float *value, const float base){
-  float diff = *value - base;
-  if(diff == 0) return;
-
-  if(diff < 0){
-    *value += COLOR_CHANGE_FACTOR;
-  }else{
-    *value -= COLOR_CHANGE_FACTOR;
-  }
-  *value = CLAMP_A(*value, 0, 255);
-}
-
-void UpdateColor(Player *p){
-  //GREEN HSV 132.631577, 1.000000 0.894118
-  bool e = ColorEq(GREEN, p->base.color);
-  bool inIujrying = p->base.isIujrying;
-  int *t = &(p->base.iujryBufferTime);
-
-  if(e){
-    *t = 0;
-    return;
-  }
-  if(*t == 0){
-    if(!inIujrying){
-      *t = 10;
-      p->base.color = WHITE;
-      return;
-    }else{
-      Color c = p->base.color;
-      Vector3 hsv = ColorToHSV(c);
-      BindValue(&(hsv.x), ColorToHSV(GREEN).x);
-      p->base.color = ColorFromHSV(hsv.x, hsv.y, hsv.z);
-      // BindValue(&(p->base.color.r), 0);
-      // BindValue(&(p->base.color.g), 228);
-      // BindValue(&(p->base.color.b), 48);
-      // BindValue(&(p->base.color.a), 255);
+    switch(p->base.hurtState){
+      case HURT_IDLE:
+        printf("hurt_idle: %d\n", p->base.stateTimer);
+        break;
+      case HURT_FLASH:
+        printf("hurt_flash: %d\n", p->base.stateTimer);
+        break;
+      case HURT_PERSIST:
+        printf("hurt_pesist: %d\n", p->base.stateTimer);
+        break;
+      case HURT_RECOVER:
+        printf("hurt_recover: %d\n", p->base.stateTimer);
+        break;
     }
-  }else{
-    *t -= 1;
-    if(*t == 0){
-      p->base.isIujrying = false;
-    }
+    printf("target Color: %d %d %d, %d\n", p->base.targetColor.r, p->base.targetColor.g, p->base.targetColor.b, p->base.targetColor.a);
   }
 }
+// 指数趋紧
+void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k){
+  float dh = target.x - value->x;
+  while(dh > 180.0f) dh -= 360.0f;
+  while(dh < -180.0f) dh += 360.0f;
+  value->x = fmodf(value->x + dh * k, 360.0f);
+  if(value->x < 0.0f) value->x += 360.0f;
+
+  value->y += (target.y - value->y) *k;
+  if(fabsf(target.y - value->y) < 0.01f) value->y = target.y;
+
+  value->z += (target.z - value->z) *k;
+  if(fabsf(target.z - value->z) < 0.01f) value->z = target.z;
+
+  // float diff = *value - base;
+  // if(FloatEqRel(diff, 0.0f)) return;
+  //
+  // if(diff < 0){
+  //   *value += step;
+  // }else{
+  //   *value -= step;
+  // }
+  // *value = CLAMP_A(*value, 0.0f, 360.0f);
+}
+
+#define ENEMY_NUMBER 2
+#define ENEMY_LOOP(x)                  \
+for(int i = 0; i < ENEMY_NUMBER; i++){ \
+  x;                                   \
+}                                      \
+
+#define ENEMY_LOOPS(x)                 \
+for(int i = 0; i < ENEMY_NUMBER; i++){ \
+  x                                    \
+}                                      \
 
 // main loop
 int main(void){
@@ -324,13 +384,11 @@ int main(void){
   InitWindow(windowWidth, windowHeight, "Moving..");
   SetTargetFPS(60);
 
-  printf("\n%f, %f %f\n", ColorToHSV(GREEN).x, ColorToHSV(GREEN).y, ColorToHSV(GREEN).z);
-
   while(!WindowShouldClose()){
     // calc
     if(player.base.health <= 0) break;
-    UpdateColor(&player);
-    ENEMY_LOOP(enemy[i].base.target = player.base.pos);
+    UpdateHurtEffect(&(player.base));
+    ENEMY_LOOP(enemy[i].base.setTarget(&((enemy + i)->base),player.base.pos));
 
     // event
     ChangeFPS();
@@ -354,7 +412,4 @@ int main(void){
 }
 
 //TODO: 添加碰撞
-// 1. 增加Vector2 vel
 //TODO: 受伤颜色改变
-// 1. 保持颜色0.5s
-// 2. 开始恢复颜色
