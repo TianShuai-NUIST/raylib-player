@@ -43,6 +43,9 @@ XX(Vector2, spawnPoint,                                        \
 XX(Vector2, target, ((Vector2){-1, -1}), player_spawnPoint)    \
 XX(Vector2, pos, player_spawnPoint,                            \
    enemy_spawnPoint)                                              \
+XX(int, hurtState, 0, 0)\
+XX(int, stateTimer, 0, 0)\
+XX(Color, targetColor, player_color, enemy_color)\
 
 // (Type, Name, Value, Value)
 #define ENTITY_FUNC_TABLE                                                          \
@@ -238,6 +241,7 @@ for(int i = 0; i < ENEMY_NUMBER; i++){ \
 void PressedEvent(Player *p){
   if(IsKeyPressed(KEY_SPACE)){
     p->base.color = RED;
+    p->base.isIujrying = true;
   }
 }
 
@@ -248,9 +252,10 @@ void ShowInfo(const Player *p){
   }
 }
 #define COLOR_CHANGE_FACTOR 5
-void BindValue(unsigned char *value, const unsigned char base){
-  int diff = (int)*value - (int)base;
+void BindValue(float *value, const float base){
+  float diff = *value - base;
   if(diff == 0) return;
+
   if(diff < 0){
     *value += COLOR_CHANGE_FACTOR;
   }else{
@@ -259,7 +264,8 @@ void BindValue(unsigned char *value, const unsigned char base){
   *value = CLAMP_A(*value, 0, 255);
 }
 
-void KeepColor(Player *p){
+void UpdateColor(Player *p){
+  //GREEN HSV 132.631577, 1.000000 0.894118
   bool e = ColorEq(GREEN, p->base.color);
   bool inIujrying = p->base.isIujrying;
   int *t = &(p->base.iujryBufferTime);
@@ -271,13 +277,17 @@ void KeepColor(Player *p){
   if(*t == 0){
     if(!inIujrying){
       *t = 10;
-      p->base.isIujrying = true;
+      p->base.color = WHITE;
       return;
     }else{
-      BindValue(&(p->base.color.r), 0);
-      BindValue(&(p->base.color.g), 228);
-      BindValue(&(p->base.color.b), 48);
-      BindValue(&(p->base.color.a), 255);
+      Color c = p->base.color;
+      Vector3 hsv = ColorToHSV(c);
+      BindValue(&(hsv.x), ColorToHSV(GREEN).x);
+      p->base.color = ColorFromHSV(hsv.x, hsv.y, hsv.z);
+      // BindValue(&(p->base.color.r), 0);
+      // BindValue(&(p->base.color.g), 228);
+      // BindValue(&(p->base.color.b), 48);
+      // BindValue(&(p->base.color.a), 255);
     }
   }else{
     *t -= 1;
@@ -314,19 +324,23 @@ int main(void){
   InitWindow(windowWidth, windowHeight, "Moving..");
   SetTargetFPS(60);
 
+  printf("\n%f, %f %f\n", ColorToHSV(GREEN).x, ColorToHSV(GREEN).y, ColorToHSV(GREEN).z);
+
   while(!WindowShouldClose()){
     // calc
     if(player.base.health <= 0) break;
-    
+    UpdateColor(&player);
     ENEMY_LOOP(enemy[i].base.target = player.base.pos);
 
     // event
     ChangeFPS();
     ShowInfo(&player);
     PressedEvent(&player);
+
+    // cotrol
     player.move(&player);
     ENEMY_LOOP(enemy[i].move(enemy + i));
-    KeepColor(&player);
+
     // draw
     BeginDrawing();
     ClearBackground(BLACK);
