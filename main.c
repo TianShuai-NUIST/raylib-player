@@ -40,11 +40,11 @@ void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k);
 #define ENTITY_ATTRI_TABLE                                     \
 XX(int, r, 25, 10)                                             \
 XX(Vector2, vel, ((Vector2){150, 150}),                        \
-   ((Vector2){120, 120}))                                           \
+   ((Vector2){120, 120}))                                         \
 XX(int, health, 100, 50)                                       \
-XX(float, mass, 10, 5)                                       \
+XX(float, mass, 10, 5)                                         \
 XX(Color, color, (GREEN), (RED))                               \
-XX(Color, defaultColor, (GREEN), (RED))                               \
+XX(Color, defaultColor, (GREEN), (RED))                        \
 XX(Vector2, spawnPoint,                                        \
    ((Vector2) {(float)windowWidth / 2, (float)windowHeight / 2}), \
    ((Vector2) {enemy_r, enemy_r}))                                \
@@ -52,16 +52,16 @@ XX(Vector2, target, ((Vector2){-1, -1}), player_spawnPoint)    \
 XX(Vector2, pos, player_spawnPoint,                            \
    enemy_spawnPoint)                                              \
 \
-XX(HurtState, hurtState, HURT_IDLE, HURT_IDLE)\
-XX(int, stateTimer, 0, 0)\
-XX(Color, targetColor, player_color, enemy_color)\
+XX(HurtState, hurtState, HURT_IDLE, HURT_IDLE)                 \
+XX(int, stateTimer, 0, 0)                                      \
+XX(Color, targetColor, player_color, enemy_color)              \
 
 // (Type, Name, Value, Value)
-#define ENTITY_FUNC_TABLE                                                             \
+#define ENTITY_FUNC_TABLE                                                           \
 XX(toTargetFunc  , toTarget  , ToTarget   , void , (struct Entity*, const Vector2)) \
-XX(inTargetFunc  , inTarget  , InTarget   , bool , (struct Entity*))                  \
+XX(inTargetFunc  , inTarget  , InTarget   , bool , (struct Entity*))                \
 XX(setTargetFunc , setTarget , SetTarget  , void , (struct Entity*, const Vector2)) \
-XX(drawFunc      , draw      , DrawEntity , void , (struct Entity*))                  \
+XX(drawFunc      , draw      , DrawEntity , void , (struct Entity*))                \
 
 // function ProtoType
 #define XX(type, name, value, return_t, arg) return_t value arg;
@@ -247,7 +247,7 @@ void DrawEntity(Entity *e){
   DrawCircleV(e -> pos, e -> r, e -> color);
 }
 
-// entity direction
+// argument: entity direction
 void ToTarget(Entity *e, const Vector2 v){
   float dt = GetFrameTime();
   if(dt > 0.1f) dt = 0.1f;
@@ -412,4 +412,4 @@ int main(void){
 }
 
 //TODO: 添加碰撞
-//TODO: 受伤颜色改变
+//Done: 受伤颜色改变
