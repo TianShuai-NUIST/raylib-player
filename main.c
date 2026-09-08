@@ -44,12 +44,10 @@ void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k);
 
 // (TYPE, NAME, PLAYER_VALUE, ENEMY_VALUE)
 #define ENTITY_ATTRI_TABLE                                     \
-XX(Vector2, vel, ((Vector2){150, 150}),                        \
-((Vector2){120, 120}))                                         \
-XX(Vector2, maxVel, ((Vector2){200, 200}),                     \
-((Vector2){170, 170}))                                         \
-XX(Vector2, accel, ((Vector2){1, 1}),                          \
-((Vector2){1, 1}))                                             \
+XX(Vector2, vel, ((Vector2){0, 0}), ((Vector2){0, 0}))         \
+XX(Vector2, velRange, ((Vector2){0, 300}), ((Vector2){0, 280}))\
+XX(Vector2, accel, ((Vector2){10, 10}), ((Vector2){95, 95})) \
+XX(Vector2, friction, ((Vector2){200, 200}), ((Vector2){50, 50}))\
 XX(float, mass, 10, 5)                                         \
                                                                \
 XX(int, r, 25, 10)                                             \
@@ -132,12 +130,6 @@ int RandRange(const int min, const int max){
   assert(min < max);
   if (min == max) return min;
   else return rand() % (max - min) + min;
-}
-
-void ClampV2(Vector2 *value, const Vector2 min,const Vector2 max){
-  float vx = Clamp(value->x,min.x, max.x);
-  float vy = Clamp(value->y,min.y, max.y);
-  *value = (Vector2){vx, vy};
 }
 
 // 浮点数相等判断,
@@ -240,24 +232,27 @@ void DrawEntity(Entity *e){
   DrawCircleV(e -> pos, e -> r, e -> color);
 }
 
-// argument: entity direction
-void ToTarget(Entity *e, const Vector2 direction){
-  float dt = GetFrameTime();
+// argument: entity direction+distance dt
+void ToTarget(Entity *e, const Vector2 direction, float dt){
   if(dt > 0.1f) dt = 0.1f;
-  Vector2 nd = Vector2Normalize(direction);
 
-  // TODO: 添加a到速度中, 计算方式是a的方向来自v, 然后e->v的各个分量和da相加.
-  // 最后记得钳制到固定范围
-  // Vector2 da = Vector2Multiply(e->accel, nv);
-  // e->vel = Vector2Add(e->vel, da);
-  // ClampV2(&(e->vel), Vector2Scale(e->maxVel, -1), e->maxVel);
+  // friction & accel 是外部改变的参数, 由我们设定, 与状态无关, 如果不使用新的局部变量, 那么行为就不会被我们控制
+  if(Vector2Length(direction) <= Vector2Length(Vector2Scale(e->vel, dt))){
+    Vector2 friction = Vector2Scale(Vector2Normalize(e->vel), Vector2Length(e->friction));
+    e->vel = Vector2Subtract(e->vel, Vector2Scale(friction, dt));
+    if(Vector2Length(e->vel) <= Vector2Length(Vector2Scale(friction, dt))){
+      e->vel = Vector2Zero();
+    }
+  } else {
+    Vector2 accel = Vector2Scale(Vector2Normalize(direction), Vector2Length(e->accel));
+    e->vel = Vector2Add(e->vel, Vector2Scale(accel, dt));
+  }
 
-  // e->pos = Vector2Add(e->pos, Vector2Multiply(e->accel, Vector2Scale(nd, dt)));
-  e->pos.x += e->vel.x * nd.x * dt;
-  e->pos.y += e->vel.y * nd.y * dt;
+  e->vel = Vector2ClampValue(e->vel, e->velRange.x, e->velRange.y);
+  e->pos = Vector2Add(e->pos,Vector2Scale(e->vel, dt));
 
   Vector2 vr = (Vector2){e->r, e->r};
-  ClampV2(&(e->pos), vr, Vector2Subtract(wSize, vr));
+  e->pos = Vector2Clamp(e->pos, vr, Vector2Subtract(wSize, vr));
 }
 
 bool InTarget(Entity *e){
@@ -266,14 +261,16 @@ bool InTarget(Entity *e){
 }
 
 void MovePlayer(Entity *e, float dt){
-  (void)dt;
   Vector2 v = (Vector2){0, 0};
   if(IsKeyDown(KEY_A)) v.x -= 1.0f;
   if(IsKeyDown(KEY_D)) v.x += 1.0f;
   if(IsKeyDown(KEY_S)) v.y += 1.0f;
   if(IsKeyDown(KEY_W)) v.y -= 1.0f;
 
-  ToTarget(e, v);
+  // 设置假想目标, 在单位1距离处.
+  v = Vector2Normalize(v);
+
+  ToTarget(e, v, dt);
 }
 
 void MoveEnemy(Entity *e, float dt){
@@ -283,13 +280,13 @@ void MoveEnemy(Entity *e, float dt){
   v = Vector2Subtract(e->target, e->pos);
 
   // 如果距离小于步长, 直接到坐标上(防止抖动)
-  float remaining = Vector2Length(v);
-  if(remaining <= Vector2Length(e->vel) * dt){
-    e->pos = e->target;
-    return;
-  }
+  // float remaining = Vector2Length(v);
+  // if(remaining <= Vector2Length(e->vel) * dt){
+  //   e->pos = e->target;
+  //   return;
+  // }
 
-  ToTarget(e, v);
+  ToTarget(e, v, dt);
 }
 
 const EntityVtbl PLAYER_VTBL = (EntityVtbl){ .move = MovePlayer, .draw = DrawEntity, };
