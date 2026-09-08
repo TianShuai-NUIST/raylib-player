@@ -112,13 +112,13 @@ typedef struct Player{
   Entity base;
   bool cursor;
 
-  void (*move)(struct Player *p);
+  void (*move)(Entity *e, float dt);
 } Player;
 
 typedef struct Enemy{
   Entity base;
 
-  void (*move)(struct Enemy *e);
+  void (*move)(Entity *e, float dt);
 } Enemy;
 
 #define REL_EPS 1e-9
@@ -274,10 +274,8 @@ void ToTarget(Entity *e, const Vector2 direction){
   // ClampV2(&(e->vel), Vector2Scale(e->maxVel, -1), e->maxVel);
 
   // e->pos = Vector2Add(e->pos, Vector2Multiply(e->accel, Vector2Scale(nd, dt)));
-  e->vel.x += nd.x * dt;
-  e->vel.y += nd.y * dt;
-  e->pos.x += e->vel.x * dt;
-  e->pos.y += e->vel.y * dt;
+  e->pos.x += e->vel.x * nd.x * dt;
+  e->pos.y += e->vel.y * nd.y * dt;
 
   Vector2 vr = (Vector2){e->r, e->r};
   ClampV2(&(e->pos), vr, Vector2Subtract(wSize, vr));
@@ -288,31 +286,31 @@ bool InTarget(Entity *e){
   else return false;
 }
 
-void MovePlayer(Player *p){
+void MovePlayer(Entity *e, float dt){
+  (void)dt;
   Vector2 v = (Vector2){0, 0};
   if(IsKeyDown(KEY_A)) v.x -= 1.0f;
   if(IsKeyDown(KEY_D)) v.x += 1.0f;
   if(IsKeyDown(KEY_S)) v.y += 1.0f;
   if(IsKeyDown(KEY_W)) v.y -= 1.0f;
 
-  p -> base.toTarget(&(p -> base), v);
+  e->toTarget(e, v);
 }
 
-void MoveEnemy(struct Enemy *e){
-  float dt = GetFrameTime();
-  if(e->base.inTarget(&(e->base))) return;
+void MoveEnemy(Entity *e, float dt){
+  if(e->inTarget(e)) return;
 
   Vector2 v;
-  v = Vector2Subtract(e->base.target, e->base.pos);
+  v = Vector2Subtract(e->target, e->pos);
 
   // 如果距离小于步长, 直接到坐标上(防止抖动)
   float remaining = Vector2Length(v);
-  if(remaining <= Vector2Length(e->base.vel) * dt){
-    e->base.pos = e->base.target;
+  if(remaining <= Vector2Length(e->vel) * dt){
+    e->pos = e->target;
     return;
   }
 
-  e -> base.toTarget(&(e->base), v);
+  e->toTarget(e, v);
 }
 
 // ==== game Loop function
@@ -407,6 +405,9 @@ int main(void){
   SetTargetFPS(60);
 
   while(!WindowShouldClose()){
+
+    float dt = GetFrameTime();
+
     // calc
     if(player.base.health <= 0) break;
     UpdateHurtEffect(&(player.base));
@@ -418,8 +419,8 @@ int main(void){
     PressedEvent(&player);
 
     // cotrol
-    player.move(&player);
-    ENEMY_LOOP(enemy[i].move(enemy + i));
+    player.move(&(player.base), dt);
+    ENEMY_LOOP(enemy[i].move(&((enemy + i)->base), dt));
 
     // draw
     BeginDrawing();
