@@ -21,40 +21,54 @@
 typedef struct Entity Entity;
 typedef enum HurtState {
   HURT_FLASH,   // 闪白
-  HURT_PERSIST,// 疼痛暗红
+  HURT_PERSIST, // 疼痛暗红
   HURT_RECOVER, // 恢复颜色
-  HURT_IDLE,      // 正常
+  HURT_IDLE,    // 正常
 } HurtState;
 
 typedef struct Player Player;
 typedef struct Enemy Enemy;
 
-const int windowWidth   = 600;
-const int windowHeight  = 600;
-const Vector2 wSize = (Vector2){(float)windowWidth, (float)windowHeight};
-const int originFPS     = 60;
+const int windowWidth  = 600;
+const int windowHeight = 600;
+const Vector2 wSize    = (Vector2){(float)windowWidth, (float)windowHeight};
+const int originFPS    = 60;
 
 void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k);
 
 // (TYPE, NAME, PLAYER_VALUE, ENEMY_VALUE)
 #define ENTITY_ATTRI_TABLE                                     \
-XX(int, r, 25, 10)                                             \
 XX(Vector2, vel, ((Vector2){150, 150}),                        \
-   ((Vector2){120, 120}))                                         \
-XX(int, health, 100, 50)                                       \
+((Vector2){120, 120}))                                         \
+XX(Vector2, maxVel, ((Vector2){200, 200}),                     \
+((Vector2){170, 170}))                                         \
+XX(Vector2, accel, ((Vector2){1, 1}),                          \
+((Vector2){1, 1}))                                             \
 XX(float, mass, 10, 5)                                         \
+                                                               \
+XX(int, r, 25, 10)                                             \
+                                                               \
 XX(Color, color, (GREEN), (RED))                               \
 XX(Color, defaultColor, (GREEN), (RED))                        \
+                                                               \
+XX(int, health, 100, 50)                                       \
 XX(Vector2, spawnPoint,                                        \
-   ((Vector2) {(float)windowWidth / 2, (float)windowHeight / 2}), \
-   ((Vector2) {enemy_r, enemy_r}))                                \
+((Vector2) {(float)windowWidth / 2, (float)windowHeight / 2}), \
+((Vector2) {enemy_r, enemy_r}))                                \
 XX(Vector2, target, ((Vector2){-1, -1}), player_spawnPoint)    \
 XX(Vector2, pos, player_spawnPoint,                            \
-   enemy_spawnPoint)                                              \
-\
+enemy_spawnPoint)                                              \
+XX(Vector2, renderPos, player_pos,                             \
+enemy_pos)                                                     \
+                                                               \
 XX(HurtState, hurtState, HURT_IDLE, HURT_IDLE)                 \
 XX(int, stateTimer, 0, 0)                                      \
 XX(Color, targetColor, player_color, enemy_color)              \
+/*
+ * pos: p
+ * vel: p/s -> dp = vel % dt
+ * accel: p/s^2 -> dv = accel * dt
+ * */
 
 // (Type, Name, Value, Value)
 #define ENTITY_FUNC_TABLE                                                           \
@@ -248,13 +262,22 @@ void DrawEntity(Entity *e){
 }
 
 // argument: entity direction
-void ToTarget(Entity *e, const Vector2 v){
+void ToTarget(Entity *e, const Vector2 direction){
   float dt = GetFrameTime();
   if(dt > 0.1f) dt = 0.1f;
+  Vector2 nd = Vector2Normalize(direction);
 
-  Vector2 cv = Vector2Normalize(v);
+  // TODO: 添加a到速度中, 计算方式是a的方向来自v, 然后e->v的各个分量和da相加.
+  // 最后记得钳制到固定范围
+  // Vector2 da = Vector2Multiply(e->accel, nv);
+  // e->vel = Vector2Add(e->vel, da);
+  // ClampV2(&(e->vel), Vector2Scale(e->maxVel, -1), e->maxVel);
 
-  e->pos = Vector2Add(e->pos, Vector2Scale(Vector2Multiply(e->vel, cv), dt));
+  // e->pos = Vector2Add(e->pos, Vector2Multiply(e->accel, Vector2Scale(nd, dt)));
+  e->vel.x += nd.x * dt;
+  e->vel.y += nd.y * dt;
+  e->pos.x += e->vel.x * dt;
+  e->pos.y += e->vel.y * dt;
 
   Vector2 vr = (Vector2){e->r, e->r};
   ClampV2(&(e->pos), vr, Vector2Subtract(wSize, vr));
@@ -294,7 +317,6 @@ void MoveEnemy(struct Enemy *e){
 
 // ==== game Loop function
 
-
 void PressedEvent(Player *p){
   if(IsKeyPressed(KEY_SPACE)){
     ChangeHurtState(&(p->base), HURT_FLASH);
@@ -304,6 +326,7 @@ void PressedEvent(Player *p){
 void ShowInfo(const Player *p){
   if(IsKeyPressed(KEY_TAB)){
     printf("Health :%d\n", p->base.health);
+    printf("target Color: %d %d %d, %d\n", p->base.targetColor.r, p->base.targetColor.g, p->base.targetColor.b, p->base.targetColor.a);
     switch(p->base.hurtState){
       case HURT_IDLE:
         printf("hurt_idle: %d\n", p->base.stateTimer);
@@ -318,7 +341,6 @@ void ShowInfo(const Player *p){
         printf("hurt_recover: %d\n", p->base.stateTimer);
         break;
     }
-    printf("target Color: %d %d %d, %d\n", p->base.targetColor.r, p->base.targetColor.g, p->base.targetColor.b, p->base.targetColor.a);
   }
 }
 // 指数趋紧
