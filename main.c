@@ -45,9 +45,9 @@ void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k);
 // (TYPE, NAME, PLAYER_VALUE, ENEMY_VALUE)
 #define ENTITY_ATTRI_TABLE                                     \
 XX(Vector2, vel, ((Vector2){0, 0}), ((Vector2){0, 0}))         \
-XX(Vector2, velRange, ((Vector2){0, 300}), ((Vector2){0, 280}))\
-XX(Vector2, accel, ((Vector2){10, 10}), ((Vector2){95, 95})) \
-XX(Vector2, friction, ((Vector2){200, 200}), ((Vector2){50, 50}))\
+XX(float, maxSpeed, 300, 280) \
+XX(float, accel, 100, 95) \
+XX(float, friction, 200, 200)\
 XX(float, mass, 10, 5)                                         \
                                                                \
 XX(int, r, 25, 10)                                             \
@@ -98,6 +98,8 @@ typedef struct Player{
 
 typedef struct Enemy{
   Entity base;
+  float stopDist;
+  float arriveDist;
 } Enemy;
 
 #define REL_EPS 1e-9
@@ -121,6 +123,8 @@ typedef struct Enemy{
     .vtbl = &ENEMY_VTBL,    \
     ENTITY_ATTRI_TABLE      \
   },                        \
+  .stopDist = player_r + enemy_r,\
+  .arriveDist = player_r * 1.5f,\
 }
 #undef XX
 
@@ -233,23 +237,32 @@ void DrawEntity(Entity *e){
 }
 
 // argument: entity direction+distance dt
-void ToTarget(Entity *e, const Vector2 direction, float dt){
+void MoveEntity(Entity *e, const Vector2 desiredVel, float dt){
   if(dt > 0.1f) dt = 0.1f;
 
-  // friction & accel 是外部改变的参数, 由我们设定, 与状态无关, 如果不使用新的局部变量, 那么行为就不会被我们控制
-  if(Vector2Length(direction) <= Vector2Length(Vector2Scale(e->vel, dt))){
-    Vector2 friction = Vector2Scale(Vector2Normalize(e->vel), Vector2Length(e->friction));
-    e->vel = Vector2Subtract(e->vel, Vector2Scale(friction, dt));
-    if(Vector2Length(e->vel) <= Vector2Length(Vector2Scale(friction, dt))){
+  // 分支的判断标注在于, 这一帧能提供什么, 如果可以满足, 那么就怎么样, 否则怎么样
+  if(Vector2LengthSqr(desiredVel) == 0.0f){
+    float speed = Vector2Length(e->vel);
+    // 1 tick 可以减慢多少速度
+    float dec = e->friction * dt;
+    if(speed <= dec){
       e->vel = Vector2Zero();
+    }else{
+      // 直接设定速度的值, 不用累计计算
+      e->vel = Vector2Scale(Vector2Normalize(e->vel), speed - dec);
     }
-  } else {
-    Vector2 accel = Vector2Scale(Vector2Normalize(direction), Vector2Length(e->accel));
-    e->vel = Vector2Add(e->vel, Vector2Scale(accel, dt));
+  }else{
+    Vector2 dv = Vector2Subtract(desiredVel, e->vel);
+    float dspeed = Vector2Length(dv);
+    float maxStep = e->accel * dt;
+    if(dspeed <= maxStep){
+      e->vel = desiredVel;
+    }else{
+      e->vel = Vector2Add(e->vel, Vector2Scale(Vector2Normalize(dv), maxStep));
+    }
   }
 
-  e->vel = Vector2ClampValue(e->vel, e->velRange.x, e->velRange.y);
-  e->pos = Vector2Add(e->pos,Vector2Scale(e->vel, dt));
+  e->pos = Vector2Add(e->pos, Vector2Scale(e->vel, dt));
 
   Vector2 vr = (Vector2){e->r, e->r};
   e->pos = Vector2Clamp(e->pos, vr, Vector2Subtract(wSize, vr));
@@ -267,26 +280,30 @@ void MovePlayer(Entity *e, float dt){
   if(IsKeyDown(KEY_S)) v.y += 1.0f;
   if(IsKeyDown(KEY_W)) v.y -= 1.0f;
 
-  // 设置假想目标, 在单位1距离处.
-  v = Vector2Normalize(v);
+  v = Vector2Scale(Vector2Normalize(v), e->maxSpeed);
 
-  ToTarget(e, v, dt);
+  MoveEntity(e, v, dt);
 }
 
 void MoveEnemy(Entity *e, float dt){
-  if(InTarget(e)) return;
+  // if(InTarget(e)) return;
+  Enemy *en = (Enemy *)e;
 
   Vector2 v;
   v = Vector2Subtract(e->target, e->pos);
+  float dist = Vector2Length(v);
+  if(dist <= en->stopDist){
+    e->vel = Vector2Zero();
+    return;
+  }
 
-  // 如果距离小于步长, 直接到坐标上(防止抖动)
-  // float remaining = Vector2Length(v);
-  // if(remaining <= Vector2Length(e->vel) * dt){
-  //   e->pos = e->target;
-  //   return;
-  // }
-
-  ToTarget(e, v, dt);
+  Vector2 dir = Vector2Normalize(v);
+  float speed = e->maxSpeed;
+  if(dist <= en->arriveDist){
+    speed *= dist / en->arriveDist;
+  }
+  Vector2 desiredVel = Vector2Scale(dir, speed);
+  MoveEntity(e, desiredVel, dt);
 }
 
 const EntityVtbl PLAYER_VTBL = (EntityVtbl){ .move = MovePlayer, .draw = DrawEntity, };
@@ -333,16 +350,6 @@ void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k){
 
   value->z += (target.z - value->z) *k;
   if(fabsf(target.z - value->z) < 0.01f) value->z = target.z;
-
-  // float diff = *value - base;
-  // if(FloatEqRel(diff, 0.0f)) return;
-  //
-  // if(diff < 0){
-  //   *value += step;
-  // }else{
-  //   *value -= step;
-  // }
-  // *value = CLAMP_A(*value, 0.0f, 360.0f);
 }
 
 #define ENEMY_NUMBER 2
