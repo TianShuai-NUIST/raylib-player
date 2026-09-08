@@ -76,56 +76,30 @@ XX(Color, targetColor, player_color, enemy_color)              \
  * accel: p/s^2 -> dv = accel * dt
  * */
 
-// (Type, Name, Value, Value)
-#define ENTITY_FUNC_TABLE                                                           \
-XX(toTargetFunc  , toTarget  , ToTarget   , void , (struct Entity*, const Vector2)) \
-XX(inTargetFunc  , inTarget  , InTarget   , bool , (struct Entity*))                \
-XX(setTargetFunc , setTarget , SetTarget  , void , (struct Entity*, const Vector2)) \
-XX(drawFunc      , draw      , DrawEntity , void , (struct Entity*))                \
-
-// function ProtoType
-#define XX(type, name, value, return_t, arg) return_t value arg;
-ENTITY_FUNC_TABLE
-#undef XX
-
-// typedef function pointer
-#define XX(type, name, value, return_t, arg) typedef return_t (*type) arg;
-ENTITY_FUNC_TABLE
-#undef XX
-
 // const value With Player
 #define XX(type, name, value, ...) const type player_##name = value;
 ENTITY_ATTRI_TABLE;
-ENTITY_FUNC_TABLE;
 #undef XX
 
 // const value With Enemy
 #define XX(type, name, _, value) const type enemy_##name = value;
 ENTITY_ATTRI_TABLE;
 #undef XX
-#define XX(type, name, value, ...) const type enemy_##name = value;
-ENTITY_FUNC_TABLE;
-#undef XX
 
 typedef struct Entity{
   const EntityVtbl *vtbl;
 #define XX(type, name, _, ...) type name;
   ENTITY_ATTRI_TABLE;
-  ENTITY_FUNC_TABLE;
 #undef XX
 } Entity;
 
 typedef struct Player{
   Entity base;
   bool cursor;
-
-  // void (*move)(Entity *e, float dt);
 } Player;
 
 typedef struct Enemy{
   Entity base;
-
-  // void (*move)(Entity *e, float dt);
 } Enemy;
 
 #define REL_EPS 1e-9
@@ -137,7 +111,6 @@ typedef struct Enemy{
   .base =(Entity){              \
     .vtbl = &PLAYER_VTBL,        \
     ENTITY_ATTRI_TABLE          \
-    ENTITY_FUNC_TABLE           \
   },                            \
   .cursor = false,              \
 }
@@ -149,7 +122,6 @@ typedef struct Enemy{
   .base =(Entity){          \
     .vtbl = &ENEMY_VTBL,    \
     ENTITY_ATTRI_TABLE      \
-    ENTITY_FUNC_TABLE       \
   },                        \
 }
 #undef XX
@@ -301,11 +273,11 @@ void MovePlayer(Entity *e, float dt){
   if(IsKeyDown(KEY_S)) v.y += 1.0f;
   if(IsKeyDown(KEY_W)) v.y -= 1.0f;
 
-  e->toTarget(e, v);
+  ToTarget(e, v);
 }
 
 void MoveEnemy(Entity *e, float dt){
-  if(e->inTarget(e)) return;
+  if(InTarget(e)) return;
 
   Vector2 v;
   v = Vector2Subtract(e->target, e->pos);
@@ -317,12 +289,11 @@ void MoveEnemy(Entity *e, float dt){
     return;
   }
 
-  e->toTarget(e, v);
+  ToTarget(e, v);
 }
 
 const EntityVtbl PLAYER_VTBL = (EntityVtbl){ .move = MovePlayer, .draw = DrawEntity, };
 const EntityVtbl ENEMY_VTBL  = (EntityVtbl){ .move = MoveEnemy, .draw = DrawEntity, };
-
 
 // ==== game Loop function
 
@@ -378,15 +349,6 @@ void MoveTowardsHSV(Vector3 *value, const Vector3 target, const float k){
 }
 
 #define ENEMY_NUMBER 2
-#define ENEMY_LOOP(x)                  \
-for(int i = 0; i < ENEMY_NUMBER; i++){ \
-  x;                                   \
-}                                      \
-
-#define ENEMY_LOOPS(x)                 \
-for(int i = 0; i < ENEMY_NUMBER; i++){ \
-  x                                    \
-}                                      \
 
 // main loop
 int main(void){
@@ -408,8 +370,8 @@ int main(void){
 
   Entity *entityList[ENEMY_NUMBER + 1];
   entityList[0] = &(player.base);
-  for(int i = 1; i < ENEMY_NUMBER + 1; i++){
-    entityList[i] = &((enemy + i)->base);
+  for(int i = 0; i < ENEMY_NUMBER; i++){
+    entityList[i + 1] = &(enemy[i].base);
   }
 
   InitWindow(windowWidth, windowHeight, "Moving..");
@@ -422,7 +384,9 @@ int main(void){
     // calc
     if(player.base.health <= 0) break;
     UpdateHurtEffect(&(player.base));
-    ENEMY_LOOP(enemy[i].base.setTarget(&((enemy + i)->base),player.base.pos));
+    for(size_t i = 1; i < ENEMY_NUMBER + 1; i++){
+      SetTarget(entityList[i], player.base.pos);
+    }
 
     // event
     ChangeFPS();
@@ -430,15 +394,17 @@ int main(void){
     PressedEvent(&player);
 
     // cotrol
-    player.base.vtbl->move(&(player.base), dt);
-    ENEMY_LOOP(enemy[i].base.vtbl->move(&((enemy + i)->base), dt));
+    for(size_t i = 0; i < ENEMY_NUMBER + 1; i++){
+      entityList[i]->vtbl->move(entityList[i], dt);
+    }
 
     // draw
     BeginDrawing();
     ClearBackground(BLACK);
     DrawFPS(20, 20);
-    player.base.vtbl->draw(&(player.base));
-    ENEMY_LOOP(enemy[i].base.vtbl->draw(&(enemy[i].base)));
+    for(size_t i = 0; i < ENEMY_NUMBER + 1; i++){
+      entityList[i]->vtbl->draw(entityList[i]);
+    }
     EndDrawing();
   }
   CloseWindow();
