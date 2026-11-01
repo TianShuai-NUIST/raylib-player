@@ -1,66 +1,37 @@
-# Info
+# raylib-player
 
-基于raylib
+C 写的 2D 实体系统。只把绘制交给 raylib，碰撞、移动、状态机自己实现。
 
-# 动画
+raylib 自带碰撞检测，这里没用。
 
-1. x += dx * speed
-  没有时间增量, 1s内移动的距离与帧率相关
-2. x += dx * speed * dt
-  引入时间增量, 保证1s内移动的距离相等
-3. x += dv * dt
-  速度矢量化, 移动不修改位置, 而是赋予实体一个速度
-4. x += (da * dt) *dt
+## 核心设计
 
-# 碰撞
+**函数表做行为分发**：`Entity` 持有数据（位置、半径、速度、血量、颜色），行为由 `EntityVtbl` 函数表决定。`Player` 和 `Enemy` 共用同一份数据布局，差异只体现在函数表指向不同实现。相当于手写一遍 C++ 的虚函数表，换来布局可控、不依赖 RTTI。
 
-> raylib 库有碰撞检测相关的函数, 但是我们自己实现, 我们力求只有绘制相关的工作交给Raylib
+**X-macro 收掉重复**：`clamp`、断言这类要按类型展开的代码，写一次、按类型生成多份，不用为每个类型各维护一份拷贝。
 
-# 架构
+**移动分三层**：
 
-```mermaid
-classDiagram
-    class Entity{
-        + Pos : Vector2
-        + r : float
-        + speed :float
-        + health : float
-        + color : Color
-        + target : Vector2
+| 层 | Player | Enemy |
+|---|---|---|
+| 意图层 | 手感（响应快、不粘滞） | AI 追踪 |
+| 运动层 | 速度积分 | 速度积分 |
+| 参数 | 加速度、上限速度 | 同上 |
 
-        + ToTarget(Target : Vector2) void
-        + InTarget() bool
-        + Draw(Pos : Vector2) void
-    }
+位置更新是 `x += v · dt`。早期版本写的是 `x += dx · speed`，位移跟帧率绑定——同一秒内 60fps 和 144fps 走的距离不一样。引入 `dt` 之后差异消失。
 
-    class Enemy{
-        + Move(dt : float) void
-    }
-    class Player{
-        + Move(dt : float) void
-    }
-    Entity <|-- Enemy
-    Entity <|-- Player
+## 怎么跑
+
+```bash
+make            # 编译，产物 raylib-player
+make run
+make tags       # 生成 ctags（含系统头）
 ```
 
-# 技巧
+依赖：clang、raylib。
 
-- [X-marco](https://dsghbc.github.io/blog/2026/08/28/X-Macro-in-C)
+## 已知限制
 
-# 移动
-
-1. 数值驱动
-
-player与enemy都继承自同一个实体, 他们使用的函数都是一样的, 但是只有每个实体的不同的属性不同, 所以产生了不同的行为.
-
-2. 移动分层
-
-我们设置移动, 其实本身是分为三层的.
-
-| 分层     | Player       | Enemey             |
-| -------- | ------------ | ------------------ |
-| 意图层   | 丝滑的手感   | AI良好的追踪体验   |
-| 运动层   | 积分模型     | 积分模型           |
-| 参数     | ...          | ...                |
-
-我们注意到了, 我们的其实本质在于通过参数的不同来控制意图层的不同.
+- 只有圆-圆碰撞，没有空间划分，实体多了会退化
+- 没有资源管理，贴图是程序内生成的色块
+- 状态机只有受击三种状态，没有通用状态转移表
